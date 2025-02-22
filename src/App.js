@@ -1,10 +1,9 @@
-// import logo from "./logo.svg";
 import "./App.css";
 import { useState, useEffect } from "react";
-// import lineSVG from "./Svg/line";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+
 function App() {
   const [resp, setResp] = useState("No response yet!");
   const [prompt, setPrompt] = useState("");
@@ -17,14 +16,22 @@ function App() {
   const [saveStatus, setSaveStatus] = useState("Save");
   const [generateStatus, setGenerateStatus] = useState("Generate");
   const [category, setCategory] = useState("");
-  const [selectedOption, setSelectedOption] = useState(""); // To keep track of the selected option
-  const genAI = new GoogleGenerativeAI(`${process.env.REACT_APP_AUTH_KEY_TWO}`);
+  const [selectedOption, setSelectedOption] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [editableContent, setEditableContent] = useState([]);
+  const [manualEmails, setManualEmails] = useState("");
+  const [csvEmails, setCsvEmails] = useState([]);
+
+  const genAI = new GoogleGenerativeAI(process.env.REACT_APP_AUTH_KEY_TWO);
 
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash",
-    systemInstruction: `You are a newsletter generating AI. Keep title within * symbol, subtitles within ** symbol, and paragraphs within *** symbol, and keep tags within two **** symbol and each tag must separate with a comma. generate newsletter taking reference from here: ${refer} and keep the title relative to user input and refernce data provided`,
+    systemInstruction:
+      "You are a newsletter generating AI. Keep title within * symbol, subtitles within ** symbol, and paragraphs within *** symbol, and keep tags within two **** symbol and each tag must separate with a comma. Generate newsletter taking reference from here: " +
+      refer +
+      " and keep the title relative to user input and reference data provided.",
   });
-  // List of options for the dropdown
+
   const options = [
     "Technology",
     "Space research",
@@ -32,15 +39,13 @@ function App() {
     "Web technology",
   ];
 
-  // Handle change in selected option
   const handleSelectionChange = (event) => {
     setSelectedOption(event.target.value);
-    setCategory(event.target.value)
-    console.log(event.target.value); // Update the state with the selected option
+    setCategory(event.target.value);
   };
-  const parseContent = (content) => {
-    // Match the title (content between single * symbols)
-    const titleMatch = content.match(/\*(.*?)\*/); // Matches text between two '*' symbols
+
+  const parseContent = (content, category) => {
+    const titleMatch = content.match(/\*(.*?)\*/);
     const parsedTitle = titleMatch ? titleMatch[1].trim() : "Untitled";
 
     const tagMatch = content.match(/\*\*\*\*(.*?)\*\*\*\*/);
@@ -55,7 +60,7 @@ function App() {
     const month = date.getMonth();
     const day = date.getDate();
     const year = date.getFullYear();
-    // Update state with parsed content
+
     const dataObj = {
       title: parsedTitle,
       tag: parsedTag,
@@ -66,29 +71,22 @@ function App() {
         paragraph: match[2].trim(),
       })),
     };
-    setGenLink(
-      `${process.env.REACT_APP_GEN_LINK}/?=${encodeURIComponent(parsedTitle)}`
-    );
 
+    const generatedLink = `${process.env.REACT_APP_GEN_LINK}/?=${encodeURIComponent(parsedTitle)}`;
+
+    setGenLink(generatedLink);
     setDataArray(dataObj);
-    console.log(dataObj);
+    setEditableContent(dataObj.content);
   };
+
   const loadRefDetails = async () => {
-    // e.preventDefault();
     try {
       const response = await axios.post(
         `${process.env.REACT_APP_BASE_URL}/scrapeRef`,
-        {
-          url: `${ref}`,
-        },
-        {
-          headers: {
-            "X-API-KEY": process.env.REACT_APP_AUTH_KEY,
-          },
-        }
+        { url: ref },
+        { headers: { "X-API-KEY": process.env.REACT_APP_AUTH_KEY } }
       );
       const data = response.data.reference;
-      console.log(data);
       setReference(data);
       return data;
     } catch (err) {
@@ -102,28 +100,13 @@ function App() {
     setGenerateStatus("Generating...");
     try {
       const result = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `${prompt}`,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 1000,
-          temperature: 0.1,
-        },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 1000, temperature: 0.1 },
       });
-      console.log("API response:", result.response.text());
       const resp = result.response.text();
-      parseContent(resp);
+      parseContent(resp, category);
       setGenerateStatus("Generated");
-      setTimeout(() => {
-        setGenerateStatus("Generate again");
-      }, 4000);
+      setTimeout(() => setGenerateStatus("Generate again"), 4000);
     } catch (error) {
       console.error("API request failed:", error);
     }
@@ -131,48 +114,50 @@ function App() {
 
   const handleCopy = async () => {
     navigator.clipboard.writeText(genLink).then(() => setCopyStatus("Copied"));
-    toast.success("Copied to clipboard", {
-      position: toast.POSITION.TOP_CENTER,
-    });
-    setTimeout(() => {
-      setCopyStatus("Copy");
-    }, 2000);
+    toast.success("Copied to clipboard", { position: toast.POSITION.TOP_CENTER });
+    setTimeout(() => setCopyStatus("Copy"), 2000);
   };
+
   const handleSave = async () => {
     setSaveStatus("Saving...");
     try {
       const response = await axios.post(
         `${process.env.REACT_APP_BASE_URL}/addData`,
         dataArray,
-        {
-          headers: {
-            "X-API-KEY": process.env.REACT_APP_AUTH_KEY,
-          },
-        }
+        { headers: { "X-API-KEY": process.env.REACT_APP_AUTH_KEY } }
       );
-      const data = response.data;
-      if (data.code === 200) {
+      if (response.data.code === 200) {
         setSaveStatus("Saved");
-        toast.success("Data saved successfully", {
-          position: toast.POSITION.TOP_CENTER,
-        });
-        setTimeout(() => {
-          setSaveStatus("Save");
-        }, [3000]);
+        toast.success("Data saved successfully", { position: toast.POSITION.TOP_CENTER });
+        setTimeout(() => setSaveStatus("Save"), 3000);
       } else {
         setSaveStatus("Try again");
-        toast.error("Failed to save, Try again!", {
-          position: toast.POSITION.TOP_CENTER,
-        });
+        toast.error("Failed to save, Try again!", { position: toast.POSITION.TOP_CENTER });
       }
     } catch (err) {
       console.log(err);
     }
   };
 
+  const handleCsvUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const emails = text.split("\n").map((line) => line.trim());
+        setCsvEmails(emails);
+      };
+      reader.readAsText(file);
+    }
+  };
+
   const sendEmail = async () => {
     setEmailStatus("Sending...");
     try {
+      const manualEmailList = manualEmails.split(",").map((email) => email.trim());
+      const allEmails = [...manualEmailList, ...csvEmails];
+
       const resp = await axios.post(
         `${process.env.REACT_APP_BASE_URL}/sendEmail`,
         {
@@ -180,12 +165,9 @@ function App() {
           link: genLink,
           des: dataArray.content[0].paragraph,
           subs: selectedOption,
+          emails: allEmails,
         },
-        {
-          headers: {
-            "X-API-KEY": process.env.REACT_APP_AUTH_KEY,
-          },
-        }
+        { headers: { "X-API-KEY": process.env.REACT_APP_AUTH_KEY } }
       );
       const data = resp.data.status;
       alert(data);
@@ -194,6 +176,49 @@ function App() {
       console.log(err);
     }
   };
+
+  const handleEdit = () => {
+    setEditMode(!editMode);
+  };
+
+  const handleContentChange = (index, field, value) => {
+    const updatedContent = [...editableContent];
+    updatedContent[index][field] = value;
+    setEditableContent(updatedContent);
+  };
+
+  const saveEdits = async () => {
+    const updatedDataArray = {
+      ...dataArray,
+      content: editableContent,
+    };
+
+    setSaveStatus("Saving...");
+    try {
+      const response = await axios.post(
+        `${process.env.REACT_APP_BASE_URL}/addData`,
+        updatedDataArray,
+        { headers: { "X-API-KEY": process.env.REACT_APP_AUTH_KEY } }
+      );
+
+      if (response.data.code === 200) {
+        const updatedGenLink = `${process.env.REACT_APP_GEN_LINK}/?=${encodeURIComponent(updatedDataArray.title)}`;
+        setDataArray(updatedDataArray);
+        setGenLink(updatedGenLink);
+        setEditMode(false);
+        setSaveStatus("Saved");
+        toast.success("Edits saved successfully");
+      } else {
+        setSaveStatus("Try again");
+        toast.error("Failed to save edits. Try again!");
+      }
+    } catch (err) {
+      console.log(err);
+      setSaveStatus("Try again");
+      toast.error("Failed to save edits. Try again!");
+    }
+  };
+
   return (
     <div className="App">
       <header>
@@ -219,27 +244,14 @@ function App() {
           <label style={{ fontSize: "16px" }} htmlFor="dropdown">
             Category:
           </label>
-          <select
-            id="dropdown"
-            value={selectedOption}
-            onChange={handleSelectionChange}
-          >
+          <select id="dropdown" value={selectedOption} onChange={handleSelectionChange}>
             <option value="" disabled>
               Select category
-            </option>{" "}
-            {/* Default option */}
+            </option>
             {options.map((option, index) => (
-              <option
-                onChange={(e) => {
-                  console.log(e.target.value);
-                  setCategory(()=>e.target.value);
-                }}
-                style={{ color: "#000" }}
-                key={index}
-                value={option}
-              >
+              <option key={index} value={option}>
                 {option}
-              </option> // Render each option dynamically
+              </option>
             ))}
           </select>
           <label htmlFor="refURL">Reference URL</label>
@@ -258,11 +270,30 @@ function App() {
             <h2>{dataArray.title}</h2>
             {dataArray.content?.length > 0 ? (
               dataArray.content.map((section, index) => (
-                <div key={index}>
-                  <h3 style={{ fontSize: "20px", fontWeight: "600" }}>
-                    {section.subtitle}
-                  </h3>
-                  <p style={{ fontSize: "18px" }}>{section.paragraph}</p>
+                <div key={index} style={{ display: "flex", flexDirection: "column", gap: "3px", marginTop: "2%" }}>
+                  {editMode ? (
+                    <>
+                      <input
+                        className="answerHeadlineedit"
+                        value={editableContent[index].subtitle}
+                        style={{ fontSize: "20px", fontWeight: "600", color: "#72a7c0" }}
+                        onChange={(e) => handleContentChange(index, "subtitle", e.target.value)}
+                      />
+                      <textarea
+                        className="answerHeadlineedit"
+                        value={editableContent[index].paragraph}
+                        style={{ fontSize: "18px", color: "white", fontFamily: "Segoe UI, Tahoma, Geneva, Verdana, sans-serif", maxHeight: "169px" }}
+                        onChange={(e) => handleContentChange(index, "paragraph", e.target.value)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <h3 style={{ fontSize: "20px", fontWeight: "600" }}>
+                        {section.subtitle}
+                      </h3>
+                      <p style={{ fontSize: "18px" }}>{section.paragraph}</p>
+                    </>
+                  )}
                 </div>
               ))
             ) : (
@@ -295,6 +326,31 @@ function App() {
           <button onClick={sendEmail} className="emailBtn">
             {emailStatus}
           </button>
+          <button onClick={handleEdit} className="editBtn">
+            {editMode ? "Cancel" : "Edit"}
+          </button>
+          {editMode && (
+            <button onClick={saveEdits} className="saveEditsBtn">
+              Save Edits
+            </button>
+          )}
+        </div>
+        <div>
+          <label htmlFor="manualEmails">Emails</label>
+          <input
+            name="manualEmails"
+            type="text"
+            value={manualEmails}
+            onChange={(e) => setManualEmails(e.target.value)}
+            placeholder="Enter emails"
+          />
+          <label htmlFor="csvFile">Upload CSV File</label>
+          <input
+            name="csvFile"
+            type="file"
+            accept=".csv"
+            onChange={(e) => handleCsvUpload(e)}
+          />
         </div>
       </div>
     </div>

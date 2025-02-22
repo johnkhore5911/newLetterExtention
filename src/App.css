@@ -237,6 +237,11 @@ button.emailBtn{
 button.emailBtn:hover{
   cursor: pointer;
 }
+.answerHeadlineedit{
+  background: transparent;
+  outline: 0;
+  border: 0;
+}
 
 button.saveBtn{
   color: #004323;
