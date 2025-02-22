@@ -3,9 +3,11 @@
   "name": "My React Chrome Extension",
   "version": "1.0",
   "description": "A Chrome extension built with React",
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
-    "default_popup": "index.html",
     "default_icon": "logo192.png"
   },
-  "permissions": ["activeTab"]
+  "permissions": ["tabs"]
 }
