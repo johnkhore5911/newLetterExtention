@@ -73,7 +73,7 @@ function App() {
     };
 
     const generatedLink = `${process.env.REACT_APP_GEN_LINK}/?=${encodeURIComponent(parsedTitle)}`;
-
+    console.log(generatedLink);
     setGenLink(generatedLink);
     setDataArray(dataObj);
     setEditableContent(dataObj.content);
@@ -114,7 +114,6 @@ function App() {
 
   const handleCopy = async () => {
     navigator.clipboard.writeText(genLink).then(() => setCopyStatus("Copied"));
-    toast.success("Copied to clipboard", { position: toast.POSITION.TOP_CENTER });
     setTimeout(() => setCopyStatus("Copy"), 2000);
   };
 
@@ -128,11 +127,9 @@ function App() {
       );
       if (response.data.code === 200) {
         setSaveStatus("Saved");
-        toast.success("Data saved successfully", { position: toast.POSITION.TOP_CENTER });
         setTimeout(() => setSaveStatus("Save"), 3000);
       } else {
         setSaveStatus("Try again");
-        toast.error("Failed to save, Try again!", { position: toast.POSITION.TOP_CENTER });
       }
     } catch (err) {
       console.log(err);
@@ -157,7 +154,9 @@ function App() {
     try {
       const manualEmailList = manualEmails.split(",").map((email) => email.trim());
       const allEmails = [...manualEmailList, ...csvEmails];
-
+      
+      const filteredEmails = allEmails.filter((email) => email !== "");
+      console.log(filteredEmails);
       const resp = await axios.post(
         `${process.env.REACT_APP_BASE_URL}/sendEmail`,
         {
@@ -165,7 +164,7 @@ function App() {
           link: genLink,
           des: dataArray.content[0].paragraph,
           subs: selectedOption,
-          emails: allEmails,
+          emails: filteredEmails,
         },
         { headers: { "X-API-KEY": process.env.REACT_APP_AUTH_KEY } }
       );
@@ -174,6 +173,7 @@ function App() {
       setEmailStatus("Email sent!");
     } catch (err) {
       console.log(err);
+      setEmailStatus("Failed to send email");
     }
   };
 
@@ -342,7 +342,7 @@ function App() {
             type="text"
             value={manualEmails}
             onChange={(e) => setManualEmails(e.target.value)}
-            placeholder="Enter emails"
+            placeholder="Enter emails (comma separated)"
           />
           <label htmlFor="csvFile">Upload CSV File</label>
           <input
